@@ -1,0 +1,25 @@
+{
+    "name": "ls_azure_sqldb",
+    "type": "Microsoft.DataFactory/factories/linkedservices",
+    "properties": {
+        "annotations": [],
+        "type": "AzureSqlDatabase",
+        "typeProperties": {
+            "server": "hsinghsqlserver.database.windows.net",
+            "database": "hsinghsqldb",
+            "encrypt": "mandatory",
+            "trustServerCertificate": false,
+            "authenticationType": "SQL",
+            "userName": "hsingh2025",
+            "password": {
+                "type": "AzureKeyVaultSecret",
+                "store": {
+                    "referenceName": "ls_AzureKeyVault",
+                    "type": "LinkedServiceReference"
+                },
+                "secretName": "azure-sqldb-password",
+                "secretVersion": "b533188448cf445e92673367445276c8"
+            }
+        }
+    }
+}

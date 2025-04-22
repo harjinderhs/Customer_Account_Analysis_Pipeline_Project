@@ -1,0 +1,25 @@
+{
+    "name": "ls_onprem_fileserver",
+    "type": "Microsoft.DataFactory/factories/linkedservices",
+    "properties": {
+        "annotations": [],
+        "type": "FileServer",
+        "typeProperties": {
+            "host": "D:\\Project1\\onprem_storage\\customer_account_data",
+            "userId": "Harjinder Singh",
+            "password": {
+                "type": "AzureKeyVaultSecret",
+                "store": {
+                    "referenceName": "ls_AzureKeyVault",
+                    "type": "LinkedServiceReference"
+                },
+                "secretName": "onprem-system-password",
+                "secretVersion": "e90803c700bc4d52a2bd2630a530afc1"
+            }
+        },
+        "connectVia": {
+            "referenceName": "SelfHostedIntegrationRuntime",
+            "type": "IntegrationRuntimeReference"
+        }
+    }
+}

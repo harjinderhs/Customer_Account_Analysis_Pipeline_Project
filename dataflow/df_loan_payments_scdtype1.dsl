@@ -1,0 +1,121 @@
+source(output(
+		PaymentID as short,
+		LoanID as short,
+		PaymentDate as date,
+		PaymentAmount as double
+	),
+	useSchema: false,
+	allowSchemaDrift: true,
+	validateSchema: false,
+	ignoreNoFilesFound: true,
+	purgeFiles: true,
+	format: 'delimited',
+	fileSystem: 'mycontainer',
+	columnDelimiter: ',',
+	escapeChar: '\\',
+	quoteChar: '\"',
+	columnNamesAsHeader: true,
+	wildcardPaths:['Silver_Layer/loan_payments/*.csv']) ~> LoanPayments
+source(output(
+		PaymentId as integer,
+		Hashkey as long
+	),
+	allowSchemaDrift: true,
+	validateSchema: false,
+	format: 'query',
+	store: 'sqlserver',
+	query: 'Select PaymentId, Hashkey from dbo.loan_payments',
+	isolationLevel: 'READ_UNCOMMITTED') ~> Target
+LoanPayments select(mapColumn(
+		src_PaymentID = PaymentID,
+		src_LoanID = LoanID,
+		src_PaymentDate = PaymentDate,
+		src_PaymentAmount = PaymentAmount
+	),
+	skipDuplicateMapInputs: true,
+	skipDuplicateMapOutputs: true) ~> RenameColumns
+RenameColumns derive(src_Hashkey = crc32(concat(toString(src_PaymentID), toString(src_LoanID), toString(src_PaymentDate), toString(src_PaymentAmount)))) ~> GenerateHashkey
+GenerateHashkey, Target lookup(src_PaymentID == PaymentId,
+	multiple: false,
+	pickup: 'any',
+	broadcast: 'auto')~> JoinDataWithTarget
+JoinDataWithTarget split(isNull(PaymentId),
+	src_PaymentID==PaymentId && src_Hashkey!=Hashkey,
+	disjoint: false) ~> SplitData@(Insert, Update)
+SplitData@Insert derive(src_CreatedBy = 'Gold-Dataflow',
+		src_CreatedDate = currentTimestamp(),
+		src_UpdatedBy = 'Gold-Dataflow',
+		src_UpdatedDate = currentTimestamp()) ~> InsertAuditColumns
+SplitData@Update derive(src_UpdatedBy = 'Gold-Dataflow-Updated',
+		src_UpdatedDate = currentTimestamp()) ~> UpdateAuditColumns
+UpdateAuditColumns alterRow(updateIf(1==1)) ~> DataUpdatePermission
+InsertAuditColumns sink(allowSchemaDrift: true,
+	validateSchema: false,
+	input(
+		PaymentId as integer,
+		LoanId as integer,
+		PaymentDate as date,
+		PaymentAmount as decimal(10,2),
+		CreatedBy as string,
+		CreatedDate as timestamp,
+		UpdatedBy as string,
+		UpdatedDate as timestamp,
+		Hashkey as long
+	),
+	format: 'table',
+	store: 'sqlserver',
+	schemaName: 'dbo',
+	tableName: 'loan_payments',
+	insertable: true,
+	updateable: false,
+	deletable: false,
+	upsertable: false,
+	stagingSchemaName: '',
+	skipDuplicateMapInputs: true,
+	skipDuplicateMapOutputs: true,
+	errorHandlingOption: 'stopOnFirstError',
+	mapColumn(
+		PaymentId = src_PaymentID,
+		LoanId = src_LoanID,
+		PaymentDate = src_PaymentDate,
+		PaymentAmount = src_PaymentAmount,
+		CreatedBy = src_CreatedBy,
+		CreatedDate = src_CreatedDate,
+		UpdatedBy = src_UpdatedBy,
+		UpdatedDate = src_UpdatedDate,
+		Hashkey = src_Hashkey
+	)) ~> AzureSQLDBInsert
+DataUpdatePermission sink(allowSchemaDrift: true,
+	validateSchema: false,
+	input(
+		PaymentId as integer,
+		LoanId as integer,
+		PaymentDate as date,
+		PaymentAmount as decimal(10,2),
+		CreatedBy as string,
+		CreatedDate as timestamp,
+		UpdatedBy as string,
+		UpdatedDate as timestamp,
+		Hashkey as long
+	),
+	format: 'table',
+	store: 'sqlserver',
+	schemaName: 'dbo',
+	tableName: 'loan_payments',
+	insertable: false,
+	updateable: true,
+	deletable: false,
+	upsertable: false,
+	keys:['PaymentId'],
+	skipDuplicateMapInputs: true,
+	skipDuplicateMapOutputs: true,
+	errorHandlingOption: 'stopOnFirstError',
+	mapColumn(
+		PaymentId = src_PaymentID,
+		LoanId = src_LoanID,
+		PaymentDate = src_PaymentDate,
+		PaymentAmount = src_PaymentAmount,
+		UpdatedBy = src_UpdatedBy,
+		UpdatedDate = src_UpdatedDate,
+		Hashkey = src_Hashkey
+	)) ~> AzureSQLDBUpdate

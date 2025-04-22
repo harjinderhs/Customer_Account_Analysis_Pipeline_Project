@@ -1,0 +1,210 @@
+{
+    "name": "df_customers_scdtype2",
+    "properties": {
+        "folder": {
+            "name": "Project1_Dataflows"
+        },
+        "type": "MappingDataFlow",
+        "typeProperties": {
+            "sources": [
+                {
+                    "linkedService": {
+                        "referenceName": "ls_azuredatalakestorage",
+                        "type": "LinkedServiceReference"
+                    },
+                    "name": "Customers"
+                },
+                {
+                    "linkedService": {
+                        "referenceName": "ls_azure_sqldb",
+                        "type": "LinkedServiceReference"
+                    },
+                    "name": "Target"
+                }
+            ],
+            "sinks": [
+                {
+                    "linkedService": {
+                        "referenceName": "ls_azure_sqldb",
+                        "type": "LinkedServiceReference"
+                    },
+                    "name": "AzureSQLDBInsert",
+                    "rejectedDataLinkedService": {
+                        "referenceName": "ls_azuredatalakestorage",
+                        "type": "LinkedServiceReference"
+                    }
+                },
+                {
+                    "linkedService": {
+                        "referenceName": "ls_azure_sqldb",
+                        "type": "LinkedServiceReference"
+                    },
+                    "name": "AzureSQLDBUpdate"
+                }
+            ],
+            "transformations": [
+                {
+                    "name": "RenameColumns"
+                },
+                {
+                    "name": "GenerateHashkey"
+                },
+                {
+                    "name": "JoinDataWithTarget"
+                },
+                {
+                    "name": "SplitData"
+                },
+                {
+                    "name": "InsertAuditColumns"
+                },
+                {
+                    "name": "UpdateAuditColumns"
+                },
+                {
+                    "name": "DataUpdatePermission"
+                },
+                {
+                    "name": "AppendTargetData"
+                }
+            ],
+            "scriptLines": [
+                "source(output(",
+                "          CustomerID as short,",
+                "          FirstName as string,",
+                "          LastName as string,",
+                "          Address as string,",
+                "          City as string,",
+                "          State as string,",
+                "          Zip as string",
+                "     ),",
+                "     useSchema: false,",
+                "     allowSchemaDrift: true,",
+                "     validateSchema: false,",
+                "     ignoreNoFilesFound: true,",
+                "     purgeFiles: true,",
+                "     format: 'delimited',",
+                "     fileSystem: 'mycontainer',",
+                "     columnDelimiter: ',',",
+                "     escapeChar: '\\\\',",
+                "     quoteChar: '\\\"',",
+                "     columnNamesAsHeader: true,",
+                "     wildcardPaths:['Silver_Layer/customers/*.csv']) ~> Customers",
+                "source(output(",
+                "          CustomerId as integer,",
+                "          Hashkey as long",
+                "     ),",
+                "     allowSchemaDrift: true,",
+                "     validateSchema: false,",
+                "     format: 'query',",
+                "     store: 'sqlserver',",
+                "     query: 'Select CustomerId, Hashkey from dbo.customers where isActive=1',",
+                "     isolationLevel: 'READ_UNCOMMITTED') ~> Target",
+                "Customers select(mapColumn(",
+                "          each(match(1==1),",
+                "               concat('src_',$$) = $$)",
+                "     ),",
+                "     skipDuplicateMapInputs: true,",
+                "     skipDuplicateMapOutputs: true) ~> RenameColumns",
+                "RenameColumns derive(src_Hashkey = crc32(concat(toString(src_CustomerID), src_FirstName, src_LastName, src_Address, src_City, src_State, src_Zip))) ~> GenerateHashkey",
+                "GenerateHashkey, Target lookup(src_CustomerID == CustomerId,",
+                "     multiple: false,",
+                "     pickup: 'any',",
+                "     broadcast: 'auto')~> JoinDataWithTarget",
+                "JoinDataWithTarget split(isNull(CustomerId),",
+                "     src_CustomerID==CustomerId && src_Hashkey!=Hashkey,",
+                "     disjoint: false) ~> SplitData@(Insert, Update)",
+                "AppendTargetData derive(src_CreatedBy = 'Gold-Dataflow',",
+                "          src_CreatedDate = currentTimestamp(),",
+                "          src_UpdatedBy = 'Gold-Dataflow',",
+                "          src_UpdatedDate = currentTimestamp(),",
+                "          src_isActive = 1) ~> InsertAuditColumns",
+                "SplitData@Update derive(src_UpdatedBy = 'Gold-Dataflow-Updated',",
+                "          src_UpdatedDate = currentTimestamp(),",
+                "          src_isActive = 0) ~> UpdateAuditColumns",
+                "UpdateAuditColumns alterRow(updateIf(1==1)) ~> DataUpdatePermission",
+                "SplitData@Insert, SplitData@Update union(byName: true)~> AppendTargetData",
+                "InsertAuditColumns sink(allowSchemaDrift: true,",
+                "     validateSchema: false,",
+                "     input(",
+                "          CustomerId as integer,",
+                "          FirstName as string,",
+                "          LastName as string,",
+                "          Address as string,",
+                "          City as string,",
+                "          State as string,",
+                "          Zip as string,",
+                "          CreatedBy as string,",
+                "          CreatedDate as timestamp,",
+                "          UpdatedBy as string,",
+                "          UpdatedDate as timestamp,",
+                "          Hashkey as long,",
+                "          isActive as integer",
+                "     ),",
+                "     format: 'table',",
+                "     store: 'sqlserver',",
+                "     schemaName: 'dbo',",
+                "     tableName: 'customers',",
+                "     insertable: true,",
+                "     updateable: false,",
+                "     deletable: false,",
+                "     upsertable: false,",
+                "     stagingSchemaName: '',",
+                "     skipDuplicateMapInputs: true,",
+                "     skipDuplicateMapOutputs: true,",
+                "     errorHandlingOption: 'stopOnFirstError',",
+                "     mapColumn(",
+                "          CustomerId = src_CustomerID,",
+                "          FirstName = src_FirstName,",
+                "          LastName = src_LastName,",
+                "          Address = src_Address,",
+                "          City = src_City,",
+                "          State = src_State,",
+                "          Zip = src_Zip,",
+                "          CreatedBy = src_CreatedBy,",
+                "          CreatedDate = src_CreatedDate,",
+                "          UpdatedBy = src_UpdatedBy,",
+                "          UpdatedDate = src_UpdatedDate,",
+                "          Hashkey = src_Hashkey,",
+                "          isActive = src_isActive",
+                "     )) ~> AzureSQLDBInsert",
+                "DataUpdatePermission sink(allowSchemaDrift: true,",
+                "     validateSchema: false,",
+                "     input(",
+                "          CustomerId as integer,",
+                "          FirstName as string,",
+                "          LastName as string,",
+                "          Address as string,",
+                "          City as string,",
+                "          State as string,",
+                "          Zip as string,",
+                "          CreatedBy as string,",
+                "          CreatedDate as timestamp,",
+                "          UpdatedBy as string,",
+                "          UpdatedDate as timestamp,",
+                "          Hashkey as long,",
+                "          isActive as integer",
+                "     ),",
+                "     format: 'table',",
+                "     store: 'sqlserver',",
+                "     schemaName: 'dbo',",
+                "     tableName: 'customers',",
+                "     insertable: false,",
+                "     updateable: true,",
+                "     deletable: false,",
+                "     upsertable: false,",
+                "     keys:['CustomerId','Hashkey'],",
+                "     skipDuplicateMapInputs: true,",
+                "     skipDuplicateMapOutputs: true,",
+                "     errorHandlingOption: 'stopOnFirstError',",
+                "     mapColumn(",
+                "          CustomerId,",
+                "          UpdatedBy = src_UpdatedBy,",
+                "          UpdatedDate = src_UpdatedDate,",
+                "          Hashkey,",
+                "          isActive = src_isActive",
+                "     )) ~> AzureSQLDBUpdate"
+            ]
+        }
+    }
+}

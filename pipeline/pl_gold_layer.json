@@ -1,0 +1,169 @@
+{
+    "name": "pl_gold_layer",
+    "properties": {
+        "activities": [
+            {
+                "name": "df_gold_accounts",
+                "type": "ExecuteDataFlow",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "dataflow": {
+                        "referenceName": "df_accounts_scdtype2",
+                        "type": "DataFlowReference"
+                    },
+                    "compute": {
+                        "coreCount": 8,
+                        "computeType": "General"
+                    },
+                    "traceLevel": "None",
+                    "cacheSinks": {
+                        "firstRowOnly": true
+                    }
+                }
+            },
+            {
+                "name": "df_gold_customers",
+                "type": "ExecuteDataFlow",
+                "dependsOn": [
+                    {
+                        "activity": "df_gold_accounts",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "dataflow": {
+                        "referenceName": "df_customers_scdtype2",
+                        "type": "DataFlowReference"
+                    },
+                    "compute": {
+                        "coreCount": 8,
+                        "computeType": "General"
+                    },
+                    "traceLevel": "None",
+                    "cacheSinks": {
+                        "firstRowOnly": true
+                    }
+                }
+            },
+            {
+                "name": "df_gold_loan_payments",
+                "type": "ExecuteDataFlow",
+                "dependsOn": [
+                    {
+                        "activity": "df_gold_loans",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "dataflow": {
+                        "referenceName": "df_loan_payments_scdtype1",
+                        "type": "DataFlowReference"
+                    },
+                    "compute": {
+                        "coreCount": 8,
+                        "computeType": "General"
+                    },
+                    "traceLevel": "None",
+                    "cacheSinks": {
+                        "firstRowOnly": true
+                    }
+                }
+            },
+            {
+                "name": "df_gold_loans",
+                "type": "ExecuteDataFlow",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "dataflow": {
+                        "referenceName": "df_loans_scdtype1",
+                        "type": "DataFlowReference"
+                    },
+                    "compute": {
+                        "coreCount": 8,
+                        "computeType": "General"
+                    },
+                    "traceLevel": "None",
+                    "cacheSinks": {
+                        "firstRowOnly": true
+                    }
+                }
+            },
+            {
+                "name": "df_gold_transactions",
+                "type": "ExecuteDataFlow",
+                "dependsOn": [
+                    {
+                        "activity": "df_gold_loan_payments",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "dataflow": {
+                        "referenceName": "df_transactions_scdtype1",
+                        "type": "DataFlowReference"
+                    },
+                    "compute": {
+                        "coreCount": 8,
+                        "computeType": "General"
+                    },
+                    "traceLevel": "None",
+                    "cacheSinks": {
+                        "firstRowOnly": true
+                    }
+                }
+            }
+        ],
+        "folder": {
+            "name": "Project1_Pipelines"
+        },
+        "annotations": [],
+        "lastPublishTime": "2025-04-21T17:05:17Z"
+    },
+    "type": "Microsoft.DataFactory/factories/pipelines"
+}

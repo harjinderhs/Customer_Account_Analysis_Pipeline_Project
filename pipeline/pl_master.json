@@ -1,0 +1,232 @@
+{
+    "name": "pl_master",
+    "properties": {
+        "activities": [
+            {
+                "name": "iterate_onprem_metadata",
+                "type": "ForEach",
+                "dependsOn": [
+                    {
+                        "activity": "get_onpremdata_metadata",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "items": {
+                        "value": "@activity('get_onpremdata_metadata').output.childItems",
+                        "type": "Expression"
+                    },
+                    "activities": [
+                        {
+                            "name": "get_lastfileupdated_metadata",
+                            "type": "GetMetadata",
+                            "dependsOn": [],
+                            "policy": {
+                                "timeout": "0.12:00:00",
+                                "retry": 0,
+                                "retryIntervalInSeconds": 30,
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "dataset": {
+                                    "referenceName": "ds_csv_onprem",
+                                    "type": "DatasetReference",
+                                    "parameters": {
+                                        "file_name": {
+                                            "value": "@item().name",
+                                            "type": "Expression"
+                                        }
+                                    }
+                                },
+                                "fieldList": [
+                                    "lastModified"
+                                ],
+                                "storeSettings": {
+                                    "type": "FileServerReadSettings",
+                                    "recursive": true,
+                                    "enablePartitionDiscovery": false
+                                },
+                                "formatSettings": {
+                                    "type": "DelimitedTextReadSettings"
+                                }
+                            }
+                        },
+                        {
+                            "name": "add_modifiedtimevalues",
+                            "type": "AppendVariable",
+                            "dependsOn": [
+                                {
+                                    "activity": "get_lastfileupdated_metadata",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            ],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "variableName": "lastmodifiedtimes_filenames",
+                                "value": {
+                                    "value": "@concat(activity('get_lastfileupdated_metadata').output.lastModified, ',,', item().name)",
+                                    "type": "Expression"
+                                }
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                "name": "get_onpremdata_metadata",
+                "type": "GetMetadata",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "dataset": {
+                        "referenceName": "ds_csv_onprem",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "file_name": " "
+                        }
+                    },
+                    "fieldList": [
+                        "childItems"
+                    ],
+                    "storeSettings": {
+                        "type": "FileServerReadSettings",
+                        "recursive": true,
+                        "enablePartitionDiscovery": false
+                    },
+                    "formatSettings": {
+                        "type": "DelimitedTextReadSettings"
+                    }
+                }
+            },
+            {
+                "name": "newfile_checkpoint",
+                "type": "IfCondition",
+                "dependsOn": [
+                    {
+                        "activity": "iterate_onprem_metadata",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "expression": {
+                        "value": "@or(\n    greaterOrEquals(split(variables('lastmodifiedtimes_filenames')[0], ',,')[0], addDays(utcNow(), -1)),\n    or(\n        greaterOrEquals(split(variables('lastmodifiedtimes_filenames')[1], ',,')[0], addDays(utcNow(), -1)),\n        or(\n            greaterOrEquals(split(variables('lastmodifiedtimes_filenames')[2], ',,')[0], addDays(utcNow(), -1)),\n            or(\n                greaterOrEquals(split(variables('lastmodifiedtimes_filenames')[3], ',,')[0], addDays(utcNow(), -1)),\n                greaterOrEquals(split(variables('lastmodifiedtimes_filenames')[4], ',,')[0], addDays(utcNow(), -1))\n            )\n        )\n    )\n)\n",
+                        "type": "Expression"
+                    },
+                    "ifFalseActivities": [
+                        {
+                            "name": "Wait1",
+                            "type": "Wait",
+                            "dependsOn": [],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "waitTimeInSeconds": 1
+                            }
+                        }
+                    ],
+                    "ifTrueActivities": [
+                        {
+                            "name": "execute_pl_bronze",
+                            "type": "ExecutePipeline",
+                            "dependsOn": [],
+                            "policy": {
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "pipeline": {
+                                    "referenceName": "pl_bronze_layer",
+                                    "type": "PipelineReference"
+                                },
+                                "waitOnCompletion": true,
+                                "parameters": {
+                                    "child_lastmodifiedvalues_filenames": {
+                                        "value": "@variables('lastmodifiedtimes_filenames')",
+                                        "type": "Expression"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "execute_pl_silver",
+                            "type": "ExecutePipeline",
+                            "dependsOn": [
+                                {
+                                    "activity": "execute_pl_bronze",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            ],
+                            "policy": {
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "pipeline": {
+                                    "referenceName": "pl_silver_layer",
+                                    "type": "PipelineReference"
+                                },
+                                "waitOnCompletion": true
+                            }
+                        },
+                        {
+                            "name": "execute_pl_gold",
+                            "type": "ExecutePipeline",
+                            "dependsOn": [
+                                {
+                                    "activity": "execute_pl_silver",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            ],
+                            "policy": {
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "pipeline": {
+                                    "referenceName": "pl_gold_layer",
+                                    "type": "PipelineReference"
+                                },
+                                "waitOnCompletion": true
+                            }
+                        }
+                    ]
+                }
+            }
+        ],
+        "variables": {
+            "lastmodifiedtimes_filenames": {
+                "type": "Array",
+                "defaultValue": []
+            },
+            "checkkkk": {
+                "type": "Array"
+            }
+        },
+        "folder": {
+            "name": "Project1_Pipelines"
+        },
+        "annotations": [],
+        "lastPublishTime": "2025-04-21T06:39:39Z"
+    },
+    "type": "Microsoft.DataFactory/factories/pipelines"
+}

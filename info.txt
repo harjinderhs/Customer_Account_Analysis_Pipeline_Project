@@ -1,0 +1,6 @@
+selected resource name:		pl_master
+selected resource type:		pipeline
+factory name:			hsingh-ADF
+factory location:		australiaeast
+subscription id:		ca6fef37-a187-4dcb-b638-ab3267c398e1
+time of download (UTC):		Tue, 22 Apr 2025 11:51:58 GMT

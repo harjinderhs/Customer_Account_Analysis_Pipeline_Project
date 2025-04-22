@@ -1,0 +1,29 @@
+{
+    "name": "4AM_trigger",
+    "properties": {
+        "annotations": [],
+        "runtimeState": "Stopped",
+        "pipelines": [
+            {
+                "pipelineReference": {
+                    "referenceName": "pl_master",
+                    "type": "PipelineReference"
+                }
+            }
+        ],
+        "type": "ScheduleTrigger",
+        "typeProperties": {
+            "recurrence": {
+                "frequency": "Day",
+                "interval": 1,
+                "startTime": "2025-04-19T22:10:00",
+                "timeZone": "Dateline Standard Time",
+                "schedule": {
+                    "hours": [
+                        4
+                    ]
+                }
+            }
+        }
+    }
+}

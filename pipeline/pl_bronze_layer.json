@@ -1,0 +1,121 @@
+{
+    "name": "pl_bronze_layer",
+    "properties": {
+        "activities": [
+            {
+                "name": "iterate_onprem_metadata",
+                "type": "ForEach",
+                "dependsOn": [],
+                "userProperties": [],
+                "typeProperties": {
+                    "items": {
+                        "value": "@pipeline().parameters.child_lastmodifiedvalues_filenames",
+                        "type": "Expression"
+                    },
+                    "activities": [
+                        {
+                            "name": "check_eachfile_lastmodifieddate",
+                            "type": "IfCondition",
+                            "dependsOn": [],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "expression": {
+                                    "value": "@greaterOrEquals(split(item(), ',,')[0], addDays(utcNow(), -1))\n",
+                                    "type": "Expression"
+                                },
+                                "ifTrueActivities": [
+                                    {
+                                        "name": "load_onpremdata_to_adls",
+                                        "type": "Copy",
+                                        "dependsOn": [],
+                                        "policy": {
+                                            "timeout": "0.12:00:00",
+                                            "retry": 0,
+                                            "retryIntervalInSeconds": 30,
+                                            "secureOutput": false,
+                                            "secureInput": false
+                                        },
+                                        "userProperties": [],
+                                        "typeProperties": {
+                                            "source": {
+                                                "type": "DelimitedTextSource",
+                                                "storeSettings": {
+                                                    "type": "FileServerReadSettings",
+                                                    "recursive": true,
+                                                    "enablePartitionDiscovery": false
+                                                },
+                                                "formatSettings": {
+                                                    "type": "DelimitedTextReadSettings"
+                                                }
+                                            },
+                                            "sink": {
+                                                "type": "DelimitedTextSink",
+                                                "storeSettings": {
+                                                    "type": "AzureBlobFSWriteSettings"
+                                                },
+                                                "formatSettings": {
+                                                    "type": "DelimitedTextWriteSettings",
+                                                    "quoteAllText": true,
+                                                    "fileExtension": ".csv"
+                                                }
+                                            },
+                                            "enableStaging": false,
+                                            "translator": {
+                                                "type": "TabularTranslator",
+                                                "typeConversion": true,
+                                                "typeConversionSettings": {
+                                                    "allowDataTruncation": true,
+                                                    "treatBooleanAsNumber": false
+                                                }
+                                            }
+                                        },
+                                        "inputs": [
+                                            {
+                                                "referenceName": "ds_csv_onprem",
+                                                "type": "DatasetReference",
+                                                "parameters": {
+                                                    "file_name": {
+                                                        "value": "@split(item(), ',,')[1]",
+                                                        "type": "Expression"
+                                                    }
+                                                }
+                                            }
+                                        ],
+                                        "outputs": [
+                                            {
+                                                "referenceName": "ds_csv_adls",
+                                                "type": "DatasetReference",
+                                                "parameters": {
+                                                    "file_name": {
+                                                        "value": "@split(item(), ',,')[1] ",
+                                                        "type": "Expression"
+                                                    },
+                                                    "folder_name": {
+                                                        "value": "@concat('Bronze_Layer/', replace(string(split(item(), ',,')[1]) ,'.csv',''))",
+                                                        "type": "Expression"
+                                                    }
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        ],
+        "parameters": {
+            "child_lastmodifiedvalues_filenames": {
+                "type": "array",
+                "defaultValue": []
+            }
+        },
+        "folder": {
+            "name": "Project1_Pipelines"
+        },
+        "annotations": [],
+        "lastPublishTime": "2025-04-21T06:39:38Z"
+    },
+    "type": "Microsoft.DataFactory/factories/pipelines"
+}

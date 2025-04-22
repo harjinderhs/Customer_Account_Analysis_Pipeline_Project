@@ -1,0 +1,127 @@
+source(output(
+		TransactionID as short,
+		AccountID as short,
+		TransactionDate as date,
+		TransactionAmount as double,
+		TransactionType as string
+	),
+	useSchema: false,
+	allowSchemaDrift: true,
+	validateSchema: false,
+	ignoreNoFilesFound: true,
+	purgeFiles: true,
+	format: 'delimited',
+	fileSystem: 'mycontainer',
+	columnDelimiter: ',',
+	escapeChar: '\\',
+	quoteChar: '\"',
+	columnNamesAsHeader: true,
+	wildcardPaths:['Silver_Layer/transactions/*.csv']) ~> Transactions
+source(output(
+		TransactionId as integer,
+		Hashkey as long
+	),
+	allowSchemaDrift: true,
+	validateSchema: false,
+	format: 'query',
+	store: 'sqlserver',
+	query: 'Select TransactionId, Hashkey from dbo.transactions',
+	isolationLevel: 'READ_UNCOMMITTED') ~> Target
+Transactions select(mapColumn(
+		src_TransactionID = TransactionID,
+		src_AccountID = AccountID,
+		src_TransactionDate = TransactionDate,
+		src_TransactionAmount = TransactionAmount,
+		src_TransactionType = TransactionType
+	),
+	skipDuplicateMapInputs: true,
+	skipDuplicateMapOutputs: true) ~> RenameColumns
+RenameColumns derive(src_Hashkey = crc32(concat( toString(src_TransactionID), toString(src_AccountID), toString(src_TransactionDate), toString(src_TransactionAmount), toString(src_TransactionType)))) ~> GenerateHashkey
+GenerateHashkey, Target lookup(src_TransactionID == TransactionId,
+	multiple: false,
+	pickup: 'any',
+	broadcast: 'auto')~> JoinDataWithTarget
+JoinDataWithTarget split(isNull(TransactionId),
+	src_TransactionID==TransactionId && src_Hashkey!=Hashkey,
+	disjoint: false) ~> SplitData@(Insert, Update)
+SplitData@Insert derive(src_CreatedBy = 'Gold-Dataflow',
+		src_CreatedDate = currentTimestamp(),
+		src_UpdatedBy = 'Gold-Dataflow',
+		src_UpdatedDate = currentTimestamp()) ~> InsertAuditColumns
+SplitData@Update derive(src_UpdatedBy = 'Gold-Dataflow-Updated',
+		src_UpdatedDate = currentTimestamp()) ~> UpdateAuditColumns
+UpdateAuditColumns alterRow(updateIf(1==1)) ~> DataUpdatePermission
+InsertAuditColumns sink(allowSchemaDrift: true,
+	validateSchema: false,
+	input(
+		TransactionId as integer,
+		AccountId as integer,
+		TransactionDate as date,
+		TransactionAmount as decimal(10,2),
+		TransactionType as string,
+		CreatedBy as string,
+		CreatedDate as timestamp,
+		UpdatedBy as string,
+		UpdatedDate as timestamp,
+		Hashkey as long
+	),
+	format: 'table',
+	store: 'sqlserver',
+	schemaName: 'dbo',
+	tableName: 'transactions',
+	insertable: true,
+	updateable: false,
+	deletable: false,
+	upsertable: false,
+	stagingSchemaName: '',
+	skipDuplicateMapInputs: true,
+	skipDuplicateMapOutputs: true,
+	errorHandlingOption: 'stopOnFirstError',
+	mapColumn(
+		TransactionId = src_TransactionID,
+		AccountId = src_AccountID,
+		TransactionDate = src_TransactionDate,
+		TransactionAmount = src_TransactionAmount,
+		TransactionType = src_TransactionType,
+		CreatedBy = src_CreatedBy,
+		CreatedDate = src_CreatedDate,
+		UpdatedBy = src_UpdatedBy,
+		UpdatedDate = src_UpdatedDate,
+		Hashkey = src_Hashkey
+	)) ~> AzureSQLDBInsert
+DataUpdatePermission sink(allowSchemaDrift: true,
+	validateSchema: false,
+	input(
+		TransactionId as integer,
+		AccountId as integer,
+		TransactionDate as date,
+		TransactionAmount as decimal(10,2),
+		TransactionType as string,
+		CreatedBy as string,
+		CreatedDate as timestamp,
+		UpdatedBy as string,
+		UpdatedDate as timestamp,
+		Hashkey as long
+	),
+	format: 'table',
+	store: 'sqlserver',
+	schemaName: 'dbo',
+	tableName: 'transactions',
+	insertable: false,
+	updateable: true,
+	deletable: false,
+	upsertable: false,
+	keys:['TransactionId'],
+	skipDuplicateMapInputs: true,
+	skipDuplicateMapOutputs: true,
+	errorHandlingOption: 'stopOnFirstError',
+	mapColumn(
+		TransactionId = src_TransactionID,
+		AccountId = src_AccountID,
+		TransactionDate = src_TransactionDate,
+		TransactionAmount = src_TransactionAmount,
+		TransactionType = src_TransactionType,
+		UpdatedBy = src_UpdatedBy,
+		UpdatedDate = src_UpdatedDate,
+		Hashkey = src_Hashkey
+	)) ~> AzureSQLDBUpdate
